@@ -148,7 +148,10 @@ if __name__ == "__main__":
     except IOError,e:
       print e
       sys.exit(1)
-    header, recipe = d.split("---", 1)
+    commentHeader, recipe = d.split("#---", 1)
+    header = ""
+    for headerLine in commentHeader.split("\n"):
+      header = header + re.sub(r"^\s*#", "", headerLine) + "\n"
     spec = safe_load(header)
     # Check that version is a string
     if not isinstance(spec["version"], basestring):
