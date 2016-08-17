@@ -578,7 +578,16 @@ def doMain():
     args.develPrefix = basename(dirname(abspath(args.configDir)))
 
   defaultsFilename = "%s/defaults-%s.sh" % (args.configDir, args.defaults)
-  if not exists(defaultsFilename):
+  defaultsLocal = "defaults-%s.sh" % args.defaults
+  if exists(defaultsLocal):
+    if exists(defaultsFilename):
+      parser.error(format("Custom defaults \"%(ld)s\" overrides an upstream "
+                          "one, \"%(ud)s\". Please rename your custom copy.",
+                          ld=defaultsLocal, ud=defaultsFilename))
+    defaultsFilename = defaultsLocal
+    warning(format("Using custom defaults \"%(defaults)s\"",
+                   defaults=defaultsLocal))
+  elif not exists(defaultsFilename):
     viableDefaults = ["- " + basename(x).replace("defaults-","").replace(".sh", "")
                       for x in glob("%s/defaults-*.sh" % args.configDir)]
     parser.error(format("Default `%(d)s' does not exists. Viable options:\n%(v)s",
@@ -623,6 +632,8 @@ def doMain():
     if p in specs:
       continue
     filename = "%s/%s.sh" % (args.configDir, p.lower())
+    if p.lower() == "defaults-"+args.defaults:
+      filename = defaultsFilename
     spec, recipe = parseRecipe(filename)
     dieOnError(spec["package"].lower() != p.lower(),
                "%s.sh has different package field: %s" % (p, spec["package"]))
