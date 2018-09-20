@@ -89,6 +89,46 @@ fi
 mkdir -p "$SOURCEDIR"
 cd "$BUILDDIR"
 
+BIGPKGNAME=`echo "$PKGNAME" | tr [:lower:] [:upper:] | tr - _`
+
+# Generate modulefile under $BUILDDIR/etc/modulefiles/$PKGNAME. User recipe can
+# overwrite it if desired
+mkdir -p etc/modulefiles
+cat > "etc/modulefiles/${PKGNAME}" <<EoF
+#%%Module1.0
+proc ModulesHelp { } {
+  global version
+  puts stderr "aliBuild Modulefile for $PKGNAME $PKGVERSION-@@PKGREVISION@$PKGHASH@@"
+}
+set version ${PKGVERSION}-@@PKGREVISION@${PKGHASH}@@
+module-whatis "aliBuild Modulefile for $PKGNAME ${PKGVERSION}-@@PKGREVISION@${PKGHASH}@@"
+# Dependencies
+module load BASE/1.0
+## DEPENDENCIES GO HERE ##
+# Standard environment (set=Modulefile only, setenv=will set the environment)
+set ${BIGPKGNAME}_VERSION \$version
+setenv ${BIGPKGNAME}_VERSION \$version
+set ${BIGPKGNAME}_ROOT \$::env(BASEDIR)/${BIGPKGNAME}/\$version
+setenv ${BIGPKGNAME}_ROOT \$::env(BASEDIR)/${BIGPKGNAME}/\$version
+EoF
+cat >> "etc/modulefiles/${PKGNAME}" <<\EoF
+# Package environment
+%(moduleEnvironment)s
+EoF
+
+# Install modulefile function
+function install_modulefile() {
+  mkdir -p "$INSTALLROOT/etc/modulefiles"
+  cp -v "${BUILDDIR}/etc/modulefiles/${PKGNAME}" \
+        "${INSTALLROOT}/etc/modulefiles/${PKGNAME}"
+}
+
+# If this is a development package, install the Modulefile immediately so that
+# it is available even in case of failures. Otherwise, copy it on success only
+if [[ ${SOURCE0:0:1} == / ]]; then
+  install_modulefile
+fi
+
 # Actual build script, as defined in the recipe
 
 # This actually does the build, taking in to account shortcuts like
@@ -106,12 +146,15 @@ cd "$BUILDDIR"
 if [[ "$CACHED_TARBALL" == "" && ! -f $BUILDROOT/log ]]; then
   set -o pipefail
   (set -x; source "$WORK_DIR/SPECS/$ARCHITECTURE/$PKGNAME/$PKGVERSION-$PKGREVISION/$PKGNAME.sh" 2>&1) | tee "$BUILDROOT/log"
+  install_modulefile
 elif [[ "$CACHED_TARBALL" == "" && $INCREMENTAL_BUILD_HASH != "0" && -f "$BUILDDIR/.build_succeeded" ]]; then
   set -o pipefail
   (%(incremental_recipe)s) 2>&1 | tee "$BUILDROOT/log"
+  install_modulefile
 elif [[ "$CACHED_TARBALL" == "" ]]; then
   set -o pipefail
   (set -x; source "$WORK_DIR/SPECS/$ARCHITECTURE/$PKGNAME/$PKGVERSION-$PKGREVISION/$PKGNAME.sh" 2>&1) | tee "$BUILDROOT/log"
+  install_modulefile
 else
   # Unpack the cached tarball in the $INSTALLROOT and remove the unrelocated
   # files.
@@ -131,7 +174,6 @@ fi
 cd "$WORK_DIR/INSTALLROOT/$PKGHASH"
 echo "$PKGHASH" > "$INSTALLROOT/.build-hash"
 mkdir -p "$INSTALLROOT/etc/profile.d"
-BIGPKGNAME=`echo "$PKGNAME" | tr [:lower:] [:upper:] | tr - _`
 rm -f "$INSTALLROOT/etc/profile.d/init.sh"
 
 # Init our dependencies

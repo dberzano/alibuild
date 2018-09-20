@@ -831,12 +831,21 @@ def doBuild(args, parser):
     # By default we append LD_LIBRARY_PATH, PATH and DYLD_LIBRARY_PATH
     # FIXME: do not append variables for Mac on Linux.
     environment = ""
+    moduleEnvironment = ""
     dieOnError(not isinstance(spec.get("env", {}), dict),
                "Tag `env' in %s should be a dict." % p)
     for key,value in spec.get("env", {}).items():
       environment += format("echo 'export %(key)s=\"%(value)s\"' >> $INSTALLROOT/etc/profile.d/init.sh\n",
                             key=key,
                             value=value)
+      # For Modulefiles, convert backticks `cmd` into [exec cmd] statements. We
+      # wrap commands in the desired shell and ignore error exit codes. Also,
+      # we silence stderr output as it triggers TCL errors
+      if len(value) > 2 and value[0] == '`' and value[-1] == '`':
+        parsedValue = '[exec bash -c "%s 2> /dev/null || true"]' % value[1:-1].replace('"', '\\"')
+      else:
+        parsedValue = '"%s"' % value.replace('"', '\\"')
+      moduleEnvironment += 'set {key} {value}\nsetenv {key} "${key}"\n'.format(key=key, value=parsedValue)
     basePath = "%s_ROOT" % p.upper().replace("-", "_")
 
     pathDict = spec.get("append_path", {})
@@ -847,6 +856,8 @@ def doBuild(args, parser):
       environment += format("\ncat << \EOF >> \"$INSTALLROOT/etc/profile.d/init.sh\"\nexport %(key)s=$%(key)s:%(value)s\nEOF",
                             key=pathName,
                             value=":".join(pathVal))
+      for thisPathVal in pathVal:
+        moduleEnvironment += 'append-path {key} "{value}"\n'.format(key=pathName, value=thisPathVal.replace('"', '\\"'))
 
     # Same thing, but prepending the results so that they win against system ones.
     defaultPrependPaths = { "LD_LIBRARY_PATH": "$%s/lib" % basePath,
@@ -863,6 +874,8 @@ def doBuild(args, parser):
       environment += format("\ncat << \EOF >> \"$INSTALLROOT/etc/profile.d/init.sh\"\nexport %(key)s=%(value)s:$%(key)s\nEOF",
                             key=pathName,
                             value=":".join(pathVal))
+      for thisPathVal in reversed(pathVal):
+        moduleEnvironment += 'prepend-path {key} "{value}"\n'.format(key=pathName, value=thisPathVal.replace('"', '\\"'))
 
     # The actual build script.
     referenceStatement = ""
@@ -902,6 +915,7 @@ def doBuild(args, parser):
                  dependenciesInit=dependenciesInit,
                  develPrefix=develPrefix,
                  environment=environment,
+                 moduleEnvironment=moduleEnvironment,
                  workDir=workDir,
                  configDir=abspath(args.configDir),
                  incremental_recipe=spec.get("incremental_recipe", ":"),
