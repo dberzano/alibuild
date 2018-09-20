@@ -91,7 +91,40 @@ cd "$BUILDDIR"
 
 BIGPKGNAME=`echo "$PKGNAME" | tr [:lower:] [:upper:] | tr - _`
 
-# Generate modulefile under $BUILDDIR/etc/modulefiles/$PKGNAME. User recipe can
+# Install Modulefile
+function install_modulefile() {
+  mkdir -p "$INSTALLROOT/etc/modulefiles"
+  cp -v "${BUILDDIR}/etc/modulefiles/${PKGNAME}" \
+        "${INSTALLROOT}/etc/modulefiles/${PKGNAME}"
+}
+
+# Ged Modulefile dependencies. Note: REQUIRES contains all dependencies, while
+# BUILD_REQUIRES contains only the build-time ones. We need to subtract the
+# build dependencies from the comprehensive list to get the runtime ones only
+function get_modulefile_deps() {
+  local MODE FOUND MODULEFILE_REQUIRES RPKG_UP RPKG_VERSION RPKG_REVISION
+  MODE="$1"  # build|runtime
+  MODULEFILE_REQUIRES=""
+  for RPKG in $REQUIRES; do
+    [[ $RPKG != defaults-* ]] || continue
+    if [[ $MODE == runtime ]]; then
+      FOUND=
+      for SPKG in $BUILD_REQUIRES; do
+        [[ $SPKG == $RPKG ]] && { FOUND=1 ; break ; } || true
+      done
+      [[ $FOUND ]] && continue || true
+    elif [[ $MODE != build ]]; then
+      exit 1
+    fi
+    RPKG_UP=$(echo $RPKG|tr '[:lower:]' '[:upper:]'|tr '-' '_')
+    RPKG_VERSION=$(eval echo "\$${RPKG_UP}_VERSION")
+    RPKG_REVISION=$(eval echo "\$${RPKG_UP}_REVISION")
+    MODULEFILE_REQUIRES="$MODULEFILE_REQUIRES ${RPKG}/${RPKG_VERSION}-${RPKG_REVISION}"
+  done
+  echo $MODULEFILE_REQUIRES
+}
+
+# Generate Modulefile under $BUILDDIR/etc/modulefiles/$PKGNAME. User recipe can
 # overwrite it if desired
 mkdir -p etc/modulefiles
 cat > "etc/modulefiles/${PKGNAME}" <<EoF
@@ -103,25 +136,16 @@ proc ModulesHelp { } {
 set version ${PKGVERSION}-@@PKGREVISION@${PKGHASH}@@
 module-whatis "aliBuild Modulefile for $PKGNAME ${PKGVERSION}-@@PKGREVISION@${PKGHASH}@@"
 # Dependencies
-module load BASE/1.0
-## DEPENDENCIES GO HERE ##
-# Standard environment (set=Modulefile only, setenv=will set the environment)
+module load BASE/1.0 $(get_modulefile_deps runtime)
+# Package environment
 set ${BIGPKGNAME}_VERSION \$version
 setenv ${BIGPKGNAME}_VERSION \$version
 set ${BIGPKGNAME}_ROOT \$::env(BASEDIR)/${BIGPKGNAME}/\$version
 setenv ${BIGPKGNAME}_ROOT \$::env(BASEDIR)/${BIGPKGNAME}/\$version
 EoF
 cat >> "etc/modulefiles/${PKGNAME}" <<\EoF
-# Package environment
 %(moduleEnvironment)s
 EoF
-
-# Install modulefile function
-function install_modulefile() {
-  mkdir -p "$INSTALLROOT/etc/modulefiles"
-  cp -v "${BUILDDIR}/etc/modulefiles/${PKGNAME}" \
-        "${INSTALLROOT}/etc/modulefiles/${PKGNAME}"
-}
 
 # If this is a development package, install the Modulefile immediately so that
 # it is available even in case of failures. Otherwise, copy it on success only
