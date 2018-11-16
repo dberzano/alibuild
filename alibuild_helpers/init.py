@@ -95,6 +95,20 @@ def doInit(args):
     err = execute(cmd)
     dieOnError(err!=0, "cannot clone %s%s" %
                        (spec["package"], " version "+p["ver"] if p["ver"] else ""))
+
+    # Make it point relatively to the mirrors for relocation: as per Git specifics, the path has to
+    # be relative to the repository's `.git` directory. Don't do it if no common path is found
+    repoObjects = os.path.join(os.path.abspath(dest), ".git", "objects")
+    refObjects = os.path.join(os.path.abspath(args.referenceSources),
+                              spec["package"].lower(), "objects")
+    repoAltConf = os.path.join(repoObjects, "info", "alternates")
+    if len(os.path.commonprefix([repoObjects, refObjects])) > 1:
+      try:
+        with open(repoAltConf, "w") as fil:
+          fil.write(os.path.relpath(refObjects, repoObjects) + "\n")
+      except (OSError,IOError) as exc:
+        dieOnError(True, "cannot change Git object reference in %s" % repoAltConf)
+
   banner(format("Development directory %(d)s created%(pkgs)s",
          pkgs=" for "+", ".join([ x["name"].lower() for x in pkgs ]) if pkgs else "",
          d=args.develPrefix))
