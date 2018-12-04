@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+# encoding: utf-8
+
+from __future__ import unicode_literals
+
+
 from __future__ import print_function
 import os
 import sys
@@ -28,22 +33,34 @@ def doMain(args, parser):
   # We set ALIBUILD_ARCHITECTURE so that it's picked up by the external
   # command which does the reporting.
   ENVIRONMENT_OVERRIDES = {
-    "LANG": "en_US.UTF-8",
-    "LANGUAGE": "en_US.UTF-8",
-    "LC_ALL": "en_US.UTF-8",
-    "LC_COLLATE": "en_US.UTF-8",
-    "LC_CTYPE": "en_US.UTF-8",
-    "LC_MESSAGES": "en_US.UTF-8",
-    "LC_MONETARY": "en_US.UTF-8",
-    "LC_NUMERIC": "en_US.UTF-8",
-    "LC_TIME": "en_US.UTF-8",
-    "LC_ALL": "en_US.UTF-8",
+    "LANG": "C",
+    "LANGUAGE": "C",
+    "LC_ALL": "C",
+    "LC_COLLATE": "C",
+    "LC_CTYPE": "C",
+    "LC_MESSAGES": "C",
+    "LC_MONETARY": "C",
+    "LC_NUMERIC": "C",
+    "LC_TIME": "C",
+    "LC_ALL": "C",
     "GREP_OPTIONS": "",
     "BASH_ENV": "",
     "ALIBUILD_ARCHITECTURE": args.architecture
   }
   os.environ.update(ENVIRONMENT_OVERRIDES)
   report_screenview(args.action)
+
+  # repr
+  import shutil
+  os.mkdir('temp')
+  with open('temp/Слава Україні.html'.encode('utf-8'), 'w'):
+      pass
+  print(os.listdir(b'temp')[0])
+  shutil.rmtree('temp')
+  print( os.environ["LC_ALL"] )
+  # /repr
+
+  exit(42)
 
   # Move to the specified working directory before doing anything else
   if "chdir" in args:
