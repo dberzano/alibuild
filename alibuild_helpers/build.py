@@ -623,23 +623,24 @@ def doBuild(args, parser):
                                 defaults = args.defaults)
     riemannStream.setState("warning")
 
-    debug("Updating from tarballs")
-    # If we arrived here it really means we have a tarball which was created
-    # using the same recipe. We will use it as a cache for the build. This means
-    # that while we will still perform the build process, rather than
-    # executing the build itself we will:
-    #
-    # - Unpack it in a temporary place.
-    # - Invoke the relocation specifying the correct work_dir and the
-    #   correct path which should have been used.
-    # - Move the version directory to its final destination, including the
-    #   correct revision.
-    # - Repack it and put it in the store with the
-    #
-    # this will result in a new package which has the same binary contents of
-    # the old one but where the relocation will work for the new dictory. Here
-    # we simply store the fact that we can reuse the contents of cachedTarball.
-    syncHelper.syncToLocal(p, spec)
+    if not args.rebuild:
+      debug("Updating from tarballs")
+      # If we arrived here it really means we have a tarball which was created
+      # using the same recipe. We will use it as a cache for the build. This means
+      # that while we will still perform the build process, rather than
+      # executing the build itself we will:
+      #
+      # - Unpack it in a temporary place.
+      # - Invoke the relocation specifying the correct work_dir and the
+      #   correct path which should have been used.
+      # - Move the version directory to its final destination, including the
+      #   correct revision.
+      # - Repack it and put it in the store with the
+      #
+      # this will result in a new package which has the same binary contents of
+      # the old one but where the relocation will work for the new dictory. Here
+      # we simply store the fact that we can reuse the contents of cachedTarball.
+      syncHelper.syncToLocal(p, spec)
 
     # Decide how it should be called, based on the hash and what is already
     # available.
@@ -731,8 +732,9 @@ def doBuild(args, parser):
       debug("Checking if devel package %s needs rebuild" % spec["package"])
       if spec["devel_hash"]+spec["deps_hash"] == spec["old_devel_hash"]:
         info("Development package %s does not need rebuild" % spec["package"])
-        buildOrder.pop(0)
-        continue
+        if not args.rebuild:
+          buildOrder.pop(0)
+          continue
 
     # Now that we have all the information about the package we want to build, let's
     # check if it wasn't built / unpacked already.
